@@ -39,7 +39,7 @@ This document is everything needed to run the formal training and hand the check
 ## 3. Steps
 
 ```
-git clone --recurse-submodules <this repository>
+git clone --recurse-submodules https://github.com/666harrypeng/reanchor-openpi-sft.git
 cd reanchor-openpi-sft && bash tools/openpi/sync.sh
 PY=tools/openpi/.venv/bin/python
 JAX_PLATFORMS=cpu $PY -m pytest tests -q                       # ≈ 1 min, CPU only
