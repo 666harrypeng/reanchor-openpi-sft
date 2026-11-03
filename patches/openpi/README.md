@@ -2,7 +2,7 @@
 
 Applied by `reanchor_sft.source.temporary_patched_openpi_copy` to a temporary `git archive` copy of
 the openpi submodule (`15a9616a00943ada6c20a0f158e3adb39df2ccac`); the submodule itself is never
-modified. Same three patches as the LIBERO pipeline that produced our reference recipe.
+modified. The reference recipe was validated with these three patches.
 
 | patch | sha256 | what |
 | --- | --- | --- |
