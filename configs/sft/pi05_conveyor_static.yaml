@@ -1,0 +1,24 @@
+# π0.5 full-parameter SFT on the static conveyor demonstrations (decision 0014). The reference
+# recipe: 8 × H100, global batch 256 (32 per device), 3000 updates ≈ 23.9 epochs of 32 094 frames.
+# A different global batch rescales steps / warmup / milestones by ceil(s × 256 / batch)
+# (reanchor.sft.schedule); nothing else here changes per machine.
+profile_id: pi05_conveyor_static_v1
+openpi_revision: 15a9616a00943ada6c20a0f158e3adb39df2ccac
+patch_sha256:
+  - 6c08348e7eb589db32abfeac3c9ac0b829a1fae6aefe8a1e79239af610d02660  # 0001 filter incomplete chunks
+  - 883907baa486d8f74784008b069b83ec36d0004893aa91fc9ac1d717d4114176  # 0002 completed-step checkpoints
+  - eaf445109b7f0224706d13bcfd76f4378c3399e37ccf0542835ae4164105b39a  # 0003 mask action tails
+base_checkpoint: gs://openpi-assets/checkpoints/pi05_base/params
+dataset_repo_id: yypeng666/reanchor-conveyor-static-ikabs-v2-lerobot21
+source_frames: 32094
+batch_size: 256
+num_train_steps: 3000
+warmup_steps: 150          # 5 %
+peak_learning_rate: 5.0e-5
+decay_learning_rate: 5.0e-6
+save_interval: 250         # rolling checkpoints (overwritten), below keep_period
+keep_period: 1000          # milestones kept: 1000 / 2000 / 3000
+log_interval: 25
+num_workers: 8
+fsdp_devices: 1            # replicated data parallel, one JAX process
+ema_decay: 0.999

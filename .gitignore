@@ -1,0 +1,9 @@
+.cache/
+.venv/
+__pycache__/
+*.pyc
+data/
+outputs/
+runs/
+wandb/
+*.log

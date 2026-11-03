@@ -1,0 +1,17 @@
+[project]
+name = "reanchor-openpi-sft"
+version = "0.1.0"
+description = "π0.5 full-parameter SFT on the reanchor conveyor static demonstrations (openpi, JAX, replicated data parallel)"
+requires-python = ">=3.11,<3.12"
+dependencies = []  # the environment is openpi's frozen lock: bash tools/openpi/sync.sh
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

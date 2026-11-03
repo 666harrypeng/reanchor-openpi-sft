@@ -1,0 +1,51 @@
+diff --git a/scripts/train.py b/scripts/train.py
+index 5d28941..d546936 100644
+--- a/scripts/train.py
++++ b/scripts/train.py
+@@ -191,6 +191,28 @@ def train_step(
+     return new_state, info
+ 
+ 
++def _checkpoint_save_step(
++    *,
++    completed_step: int,
++    num_train_steps: int,
++    save_interval: int,
++    keep_period: int | None,
++) -> int | None:
++    if completed_step <= 0:
++        raise ValueError("completed_step must be positive")
++    if num_train_steps <= 0 or completed_step > num_train_steps:
++        raise ValueError("completed_step must not exceed num_train_steps")
++    if save_interval <= 0:
++        raise ValueError("save_interval must be positive")
++    if keep_period is not None and keep_period <= 0:
++        raise ValueError("keep_period must be positive when set")
++    rolling_save = completed_step % save_interval == 0
++    milestone_save = keep_period is not None and completed_step % keep_period == 0
++    if rolling_save or milestone_save or completed_step == num_train_steps:
++        return completed_step
++    return None
++
++
+ def main(config: _config.TrainConfig):
+     init_logging()
+     logging.info(f"Running on: {platform.node()}")
+@@ -269,8 +291,15 @@ def main(config: _config.TrainConfig):
+             infos = []
+         batch = next(data_iter)
+ 
+-        if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
+-            _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
++        completed_step = int(train_state.step)
++        checkpoint_step = _checkpoint_save_step(
++            completed_step=completed_step,
++            num_train_steps=config.num_train_steps,
++            save_interval=config.save_interval,
++            keep_period=config.keep_period,
++        )
++        if checkpoint_step is not None:
++            _checkpoints.save_state(checkpoint_manager, train_state, data_loader, checkpoint_step)
+ 
+     logging.info("Waiting for checkpoint manager to finish")
+     checkpoint_manager.wait_until_finished()
