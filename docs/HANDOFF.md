@@ -79,5 +79,9 @@ checkpoint directory is compared). A new attempt with different settings needs a
 - *`Repository Not Found` for the dataset*: the dataset must sit under `--dataset-root/<repo id>`
   with its `meta/` and `data/` directories; check the `snapshot_download` target.
 - *Resume refused*: the contract differs; see the key named in the error.
+- *Blackwell consumer / workstation cards (RTX 50xx, RTX PRO 6000, compute capability 12.0)*: the
+  pinned toolchain's Triton GEMM path fails in XLA's autotuner (`ptxas ... syntax error`). Set
+  `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false`; training then runs but several times slower
+  than on H100. Data-centre Hopper (H100, H200) does not need this.
 - *Checkpoint download*: `pi05_base` (12 GB) is fetched from Google Cloud Storage anonymously
   into `.cache/openpi` on the first run; set `OPENPI_DATA_HOME` to relocate the cache.
