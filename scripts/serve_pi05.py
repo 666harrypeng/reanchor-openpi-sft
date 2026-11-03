@@ -3,7 +3,8 @@
     tools/openpi/.venv/bin/python scripts/serve_pi05.py \
         --checkpoint <run>/checkpoints/pi05_conveyor_static/<run>/3000 --port 8003
 
-`--mem-fraction` caps XLA's preallocation so a simulator and the policy can share one GPU.
+XLA allocates on demand (no preallocation) and `--mem-fraction` caps it, so Isaac Sim and the policy
+share one GPU: bf16 π0.5 holds ≈ 9 GB once loaded (measured on the 4080).
 """
 
 from __future__ import annotations
@@ -25,8 +26,9 @@ def main() -> None:
     )
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8003)
-    p.add_argument("--mem-fraction", type=float, default=0.5)
+    p.add_argument("--mem-fraction", type=float, default=0.75)
     args = p.parse_args()
+    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", str(args.mem_fraction))
 
     import uvicorn

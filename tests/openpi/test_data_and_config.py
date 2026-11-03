@@ -132,3 +132,19 @@ def test_outputs_return_eight_dims(patched_openpi):
 
     out = ConveyorOutputs()({"actions": np.arange(50 * 32, dtype=np.float32).reshape(50, 32)})
     assert out["actions"].shape == (50, 8) and out["actions"][0, 7] == 7
+
+
+def test_transforms_and_data_config_are_picklable_for_loader_workers(patched_openpi, tiny_dataset):
+    """openpi's torch loader spawns workers (num_workers 8) and pickles the dataset + transforms."""
+    import pickle
+
+    from openpi.models import model as _model
+
+    from reanchor_sft.data import ConveyorDataConfig, ConveyorInputs, ConveyorOutputs
+
+    for obj in (
+        ConveyorInputs(model_type=_model.ModelType.PI05),
+        ConveyorOutputs(),
+        ConveyorDataConfig(repo_id=tiny_dataset),
+    ):
+        assert type(pickle.loads(pickle.dumps(obj))) is type(obj)

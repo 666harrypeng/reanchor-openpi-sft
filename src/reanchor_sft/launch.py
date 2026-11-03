@@ -123,7 +123,7 @@ def run(args: LaunchArgs, *, backends: Backends) -> dict:
         norm_stats = backends.norm_stats(config, expected_frames=frames)
     report: dict[str, Any] = {
         "implementation_revision": _git("rev-parse", "HEAD"),
-        "implementation_dirty": bool(_git("status", "--porcelain")),
+        "implementation_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
         "profile_sha256": _sha256_text(Path(args.profile_path)),
         "dataset_repo_id": args.dataset_repo_id,
         "dataset_sidecar_sha256": _sha256_text(sidecar_path),
