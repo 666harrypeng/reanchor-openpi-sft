@@ -5,7 +5,7 @@ Training, norm stats and serving run against a `git archive` of that commit, ext
 temporary directory with `patches/openpi/000{1,2,3}` applied, and importable (`<copy>/src` at
 `sys.path[0]`) for the duration of a `with` block. On exit the copy is deleted, its modules are
 dropped from `sys.modules` and `sys.path` is restored, so two runs in one process never see
-mixed sources. The mechanism is the one the LIBERO pipeline validated.
+mixed sources. The mechanism was validated on an earlier project.
 """
 
 from __future__ import annotations
