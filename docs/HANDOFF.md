@@ -26,6 +26,8 @@ This document is everything needed to run the formal training and hand the check
   batch must be divisible by that count; there is no gradient accumulation and the launcher never
   changes the batch on its own. If a batch does not fit, choose a smaller global batch — the
   schedule follows.
+- Verified so far: the whole chain (preflight → 100 updates → resume → receipts → W&B) on one
+  RTX PRO 6000 at global batch 32; the 8 × H100 formal run is the step this document hands over.
 - Environment: `bash tools/openpi/sync.sh` creates `tools/openpi/.venv` from openpi's frozen lock
   (JAX 0.5.3, flax 0.10.2, lerobot at openpi's pin) plus a few extras. Or build
   `docker/sft.Dockerfile`. Disk: ≈ 15 GB dataset, 12 GB base checkpoint, ≈ 25 GB per milestone
@@ -51,7 +53,7 @@ $PY scripts/sft_train.py --run-name formal-h100x8 --work-dir runs/formal --mode 
 # 2. smoke: 100 updates in a separate work dir, then a resume to 120
 $PY scripts/sft_train.py --run-name smoke --work-dir runs/smoke --mode smoke --dataset-root data/lerobot --batch-size 256
 $PY scripts/sft_train.py --run-name smoke --work-dir runs/smoke --mode smoke --dataset-root data/lerobot --batch-size 256 --resume
-# 3. formal (≈ 3 h on 8 × H100 by the reference pipeline's throughput; W&B on)
+# 3. formal (≈ 1.5 h on 8 × H100: the reference pipeline measured 1.6 s per update at 32 per card; W&B on)
 $PY scripts/sft_train.py --run-name formal-h100x8 --work-dir runs/formal --mode formal --dataset-root data/lerobot --batch-size 256
 # 4. publish the three milestones (public listing, manual gate)
 $PY scripts/sft_publish.py --checkpoint-dir runs/formal/checkpoints/pi05_conveyor_static/formal-h100x8 \
@@ -69,7 +71,8 @@ checkpoint directory is compared). A new attempt with different settings needs a
 2. `runs/formal/checkpoints/pi05_conveyor_static/formal-h100x8/verified_run-step3000.json` (the
    receipt: code revision, dataset and profile hashes, schedule, topology, elapsed time, device
    memory) and `runs/formal/preflight.json`.
-3. The W&B run link (project `reanchor-sft`, run `formal-h100x8`): loss, grad norm, param norm.
+3. The W&B run link (project `reanchor-sft` under your own entity, run `formal-h100x8`): loss,
+   grad norm, param norm, learning rate.
 
 ## 5. Troubleshooting
 
