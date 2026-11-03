@@ -86,5 +86,12 @@ checkpoint directory is compared). A new attempt with different settings needs a
   pinned toolchain's Triton GEMM path fails in XLA's autotuner (`ptxas ... syntax error`). Set
   `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false`; training then runs but several times slower
   than on H100. Data-centre Hopper (H100, H200) does not need this.
+- *A checkpoint save never finishes* (training reaches the save step, zero bytes are written for
+  minutes, one thread sits at 100 % kernel time, GPU idle): on multi-socket hosts with automatic
+  NUMA balancing and transparent huge pages the kernel migrates the ~40 GB save buffers between NUMA
+  nodes under compaction. Run the trainer through `tools/openpi/thp_off.py`, which disables THP for
+  the process and its workers (`python tools/openpi/thp_off.py scripts/sft_train.py ...`); the
+  42 GB train-state save then takes under a minute. Seen on a 2-socket RTX PRO 6000 node; the
+  code path is unchanged openpi/orbax.
 - *Checkpoint download*: `pi05_base` (12 GB) is fetched from Google Cloud Storage anonymously
   into `.cache/openpi` on the first run; set `OPENPI_DATA_HOME` to relocate the cache.
