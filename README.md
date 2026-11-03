@@ -20,3 +20,10 @@ $PY scripts/sft_train.py --run-name smoke --work-dir runs/smoke --mode smoke --b
 $PY scripts/sft_train.py --run-name formal-h100x8 --work-dir runs/formal --mode formal --batch-size 256
 $PY scripts/sft_publish.py --checkpoint-dir runs/formal/checkpoints/pi05_conveyor_static/formal-h100x8 --steps 1000 2000 3000 --repo <user>/<repo>
 ```
+
+## Licence
+
+The code in this repository is released under the Apache License 2.0 (`LICENSE`). The π0.5 base
+model and the fine-tuned checkpoints derived from it are subject to their own terms
+(`licenses/pi05/LICENSE`, `NOTICE`, `GEMMA_TERMS.txt`), which are also attached to every published
+checkpoint.
