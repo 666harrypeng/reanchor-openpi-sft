@@ -31,6 +31,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--repo-id", default=contract.DATASET_REPO_V21)
     p.add_argument("--root", type=Path, default=Path("data/s5/lerobot"))
     p.add_argument("--episodes", type=int, default=None, help="convert only the first N (smoke)")
+    p.add_argument(
+        "--writer-threads",
+        type=int,
+        default=None,
+        help="LeRobot image-writer threads (PNG encoding); default min(16, cpus), 0 = synchronous",
+    )
     p.add_argument("--out", type=Path, required=True, help="JSON report")
     p.add_argument("--push", action="store_true")
     return p.parse_args()
@@ -49,6 +55,7 @@ def main() -> None:
         root=args.root,
         episodes=args.episodes,
         source_sha256=digest,
+        writer_threads=args.writer_threads,
     )
     side = json.loads((out / SIDECAR).read_text())
     report = {**side, "path": str(out), "seconds": round(time.time() - t0, 1)}

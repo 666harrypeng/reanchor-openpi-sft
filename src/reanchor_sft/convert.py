@@ -116,6 +116,12 @@ def _features(hw: tuple[int, int]) -> dict:
     return {"image": img, "wrist_image": img, "state": vec, "actions": dict(vec)}
 
 
+def default_writer_threads() -> int:
+    import os
+
+    return max(1, min(16, os.cpu_count() or 1))
+
+
 def write_lerobot_v21(
     hdf5: Path,
     *,
@@ -123,8 +129,13 @@ def write_lerobot_v21(
     root: Path,
     episodes: int | None = None,
     source_sha256: str | None = None,
+    writer_threads: int | None = None,
 ) -> Path:
-    """Write `<root>/<repo_id>` (staged under a `.building` name, renamed when complete)."""
+    """Write `<root>/<repo_id>` (staged under a `.building` name, renamed when complete).
+
+    PNG encoding is the cost; LeRobot's own asynchronous image writer encodes frames on
+    `writer_threads` threads while the next frames are read (0 = synchronous, identical output).
+    """
     import os
 
     os.environ.setdefault("HF_LEROBOT_HOME", str(Path(root).resolve()))
@@ -150,7 +161,9 @@ def write_lerobot_v21(
         features=_features(hw),
         use_videos=False,
         image_writer_processes=0,
-        image_writer_threads=0,
+        image_writer_threads=(
+            default_writer_threads() if writer_threads is None else writer_threads
+        ),
     )
     n_eps = n_frames = 0
     for ep in iter_episodes(hdf5, limit=episodes):
@@ -182,8 +195,10 @@ def write_lerobot_v21(
         "action_names": list(contract.STATE_NAMES),
         "openpi_revision": OPENPI_REVISION,
         "lerobot_revision": LEROBOT_REVISION,
+        "writer_threads": ds.image_writer.num_threads if ds.image_writer else 0,
         "header": asdict(header),
     }
+    ds.stop_image_writer()
     (staging / SIDECAR).write_text(json.dumps(sidecar, indent=2) + "\n")
     staging.rename(final)
     return final
