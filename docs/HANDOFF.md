@@ -12,7 +12,10 @@ This document is everything needed to run the formal training and hand the check
   `wrist_image`, `state` = `x y z qw qx qy qz gripper` (end-effector pose + gripper state, 1 open /
   0 closed), `actions` = the same 8 names as an absolute end-effector pose + gripper command.
   Dataset: `yypeng666/reanchor-conveyor-static-ikabs-v2-lerobot21` (LeRobot v2.1; gated — request
-  access on the Hub, it is granted manually).
+  access on the Hub, it is granted manually). Normalization: position and gripper use openpi's
+  quantile statistics; the quaternion components use the identity (they already lie in [−1, 1]).
+  The preflight computes the statistics and refuses any dimension whose normalized extremes leave
+  ±3.
 - **Recipe** (`configs/sft/pi05_conveyor_static.yaml`, do not edit): global batch 256, 3000
   updates (≈ 23.9 epochs), warmup 150, cosine 5e-5 → 5e-6, AdamW clip 1.0, EMA 0.999, bf16, seed
   42. Milestones at 1000 / 2000 / 3000 updates are kept; a rolling checkpoint every 250.
@@ -27,7 +30,10 @@ This document is everything needed to run the formal training and hand the check
   changes the batch on its own. If a batch does not fit, choose a smaller global batch — the
   schedule follows.
 - Verified so far: the whole chain (preflight → 100 updates → resume → receipts → W&B) on one
-  RTX PRO 6000 at global batch 32; the 8 × H100 formal run is the step this document hands over.
+  RTX PRO 6000 at global batch 32 (loss 0.64 → 0.08 over 100 updates on clean batches). That smoke
+  also exposed a normalization blow-up on the quaternion dimensions, fixed since (section 1); the
+  smoke step below re-verifies the loss scale before the formal run. The 8 × H100 formal run is
+  the step this document hands over.
 - Environment: `bash tools/openpi/sync.sh` creates `tools/openpi/.venv` from openpi's frozen lock
   (JAX 0.5.3, flax 0.10.2, lerobot at openpi's pin) plus a few extras. Or build
   `docker/sft.Dockerfile`. Disk: ≈ 15 GB dataset, 12 GB base checkpoint, ≈ 25 GB per milestone
@@ -50,7 +56,9 @@ $PY -c "from huggingface_hub import snapshot_download as d; d('yypeng666/reancho
 # 1. preflight (data, transforms, norm stats; no training)
 $PY scripts/sft_train.py --run-name formal-h100x8 --work-dir runs/formal --mode formal \
     --dataset-root data/lerobot --batch-size 256 --check-data-only
-# 2. smoke: 100 updates in a separate work dir, then a resume to 120
+# 2. smoke: 100 updates in a separate work dir, then a resume to 120. Check W&B before step 3:
+#    loss ≈ 0.6 at update 0 and ≈ 0.1 by update 100, grad norm O(1–10). Loss ≫ 1 or grad norm
+#    ≫ 10 means wrong normalization statistics: stop and report instead of training.
 $PY scripts/sft_train.py --run-name smoke --work-dir runs/smoke --mode smoke --dataset-root data/lerobot --batch-size 256
 $PY scripts/sft_train.py --run-name smoke --work-dir runs/smoke --mode smoke --dataset-root data/lerobot --batch-size 256 --resume
 # 3. formal (≈ 1.5 h on 8 × H100: the reference pipeline measured 1.6 s per update at 32 per card; W&B on)
@@ -82,6 +90,10 @@ checkpoint directory is compared). A new attempt with different settings needs a
 - *`Repository Not Found` for the dataset*: the dataset must sit under `--dataset-root/<repo id>`
   with its `meta/` and `data/` directories; check the `snapshot_download` target.
 - *Resume refused*: the contract differs; see the key named in the error.
+- *Loss in the millions, grad norm in the hundreds on some log steps*: a normalization dimension
+  with q01 == q99 and rare outliers (the quaternion components had this before 2026-11-04). The
+  preflight now refuses such statistics (`normalized extremes beyond ±3`); if you still see it,
+  the dataset or the code differ from this document — report rather than train.
 - *Blackwell consumer / workstation cards (RTX 50xx, RTX PRO 6000, compute capability 12.0)*: the
   pinned toolchain's Triton GEMM path fails in XLA's autotuner (`ptxas ... syntax error`). Set
   `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false`; training then runs but several times slower

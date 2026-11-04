@@ -43,9 +43,19 @@ def test_norm_stats_count_every_frame_once(patched_openpi, tiny_dataset, tmp_pat
             for k in range(2)
         ]
     )
-    np.testing.assert_allclose(stats["state"]["mean"], states.mean(0), atol=1e-5)
+    pose = [0, 1, 2, 7]  # position and gripper: openpi's quantile statistics
+    np.testing.assert_allclose(
+        np.array(stats["state"]["mean"])[pose], states.mean(0)[pose], atol=1e-5
+    )
     actions = np.concatenate([np.full((6, 8), k + 1) + np.arange(8) / 10 for k in range(2)])
-    np.testing.assert_allclose(stats["actions"]["mean"], actions.mean(0), atol=1e-5)
+    np.testing.assert_allclose(
+        np.array(stats["actions"]["mean"])[pose], actions.mean(0)[pose], atol=1e-5
+    )
+    # quaternion dims: the identity (training.identity_quaternion_norm)
+    for key in ("state", "actions"):
+        s = {k: np.array(v)[3:7] for k, v in stats[key].items()}
+        assert (s["q01"] == -1).all() and (s["q99"] == 1).all()
+        assert (s["mean"] == 0).all() and (s["std"] == 1).all()
     # the config's data factory now loads them
     data_config = cfg.data.create(cfg.assets_dirs, cfg.model)
     assert data_config.norm_stats is not None and set(data_config.norm_stats) == {

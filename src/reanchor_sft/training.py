@@ -8,6 +8,7 @@ Everything here imports openpi lazily and expects the patched copy on `sys.path`
 from __future__ import annotations
 
 import importlib.util
+import logging
 import math
 from pathlib import Path
 from typing import Any
@@ -119,8 +120,60 @@ def _load_script(name: str):
     return module
 
 
+NORMALIZED_ABS_LIMIT = 3.0  # quantile-normalized data lives in about [-1, 1]; positions reach ~1.5
+
+
+def identity_quaternion_norm(stats: Any) -> Any:
+    """Return `stats` with the quaternion dims (3:7) normalized by the identity.
+
+    π0.5 maps [q01, q99] → [-1, 1]. The expert's orientation is one constant top-down quaternion on
+    every row but the planner's first (the hold at the current pose), so qw and qz have
+    q01 == q99 == 0 and that row would be scaled by ~1e5 (the 2026-11-03 smoke logged a loss of
+    6e6). Unit-quaternion components already lie in [-1, 1]: (q01, q99) = (-1, 1) and
+    (mean, std) = (0, 1) leave them unchanged under either normalization scheme.
+    """
+    q = contract.QUATERNION_DIMS
+    fields = (stats.mean, stats.std, stats.q01, stats.q99)
+    mean, std, q01, q99 = (np.array(a, copy=True) for a in fields)
+    mean[q], std[q], q01[q], q99[q] = 0.0, 1.0, -1.0, 1.0
+    return type(stats)(mean=mean, std=std, q01=q01, q99=q99)
+
+
+def normalized_extremes(
+    stats: Any,
+    lo: np.ndarray,
+    hi: np.ndarray,
+    *,
+    names: tuple[str, ...],
+    limit: float = NORMALIZED_ABS_LIMIT,
+) -> dict:
+    """Per-dimension (min, max) of the raw extremes after quantile normalization.
+
+    Raises when a dimension leaves ±`limit`: a near-constant dimension with outliers, which the
+    quantile scheme would blow up into the training targets.
+    """
+    q01, q99 = np.asarray(stats.q01, dtype=np.float64), np.asarray(stats.q99, dtype=np.float64)
+    scale = q99 - q01 + 1e-6
+    n_lo = (np.asarray(lo, dtype=np.float64) - q01) / scale * 2.0 - 1.0
+    n_hi = (np.asarray(hi, dtype=np.float64) - q01) / scale * 2.0 - 1.0
+    out: dict = {name: (float(a), float(b)) for name, a, b in zip(names, n_lo, n_hi, strict=True)}
+    bad = {name: out[name] for name in names if max(abs(out[name][0]), abs(out[name][1])) > limit}
+    if bad:
+        raise ValueError(
+            f"normalized extremes beyond ±{limit}: {bad} — a near-constant dimension with "
+            "outliers under quantile normalization; its training targets would be scaled by the "
+            "reciprocal of the quantile range"
+        )
+    out["max_abs"] = float(np.max(np.abs(np.concatenate([n_lo, n_hi]))))
+    return out
+
+
 def compute_norm_stats(config: Any, *, expected_frames: int) -> Path:
-    """State / action statistics over every frame once (patch 0001 keeps the partial batch)."""
+    """State / action statistics over every frame once (patch 0001 keeps the partial batch).
+
+    Quaternion dims use the identity (`identity_quaternion_norm`); the raw extremes are checked
+    after normalization (`normalized_extremes`) so a blown-up target can never reach training.
+    """
     import openpi.shared.normalize as normalize
 
     data_config = config.data.create(config.assets_dirs, config.model)
@@ -133,6 +186,8 @@ def compute_norm_stats(config: Any, *, expected_frames: int) -> Path:
         0,
     )
     stats = {"state": normalize.RunningStats(), "actions": normalize.RunningStats()}
+    lo: dict[str, np.ndarray] = {}
+    hi: dict[str, np.ndarray] = {}
     frames = 0
     for batch in loader:
         state = np.asarray(batch["state"])
@@ -143,12 +198,18 @@ def compute_norm_stats(config: Any, *, expected_frames: int) -> Path:
         if not mask[:, 0].all():
             raise ValueError("every source must start with a real action")
         frames += state.shape[0]
-        stats["state"].update(state)
-        stats["actions"].update(actions[:, 0])  # each recorded frame counted once
+        for key, rows in (("state", state), ("actions", actions[:, 0])):  # each frame counted once
+            stats[key].update(rows)
+            lo[key] = rows.min(0) if key not in lo else np.minimum(lo[key], rows.min(0))
+            hi[key] = rows.max(0) if key not in hi else np.maximum(hi[key], rows.max(0))
     if frames != expected_frames:
         raise ValueError(f"norm stats covered {frames} frames, expected {expected_frames}")
+    result = {k: identity_quaternion_norm(v.get_statistics()) for k, v in stats.items()}
+    for key, value in result.items():
+        extremes = normalized_extremes(value, lo[key], hi[key], names=contract.STATE_NAMES)
+        logging.info("normalized %s extremes: %s", key, extremes)
     out_dir = Path(config.assets_dirs) / data_config.repo_id
-    normalize.save(out_dir, {k: v.get_statistics() for k, v in stats.items()})
+    normalize.save(out_dir, result)
     return out_dir / "norm_stats.json"
 
 

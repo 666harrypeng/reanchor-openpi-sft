@@ -11,6 +11,7 @@ FPS = 25  # 1 / (sim_dt 0.01 × decimation 4)
 STATE_NAMES: tuple[str, ...] = ("x", "y", "z", "qw", "qx", "qy", "qz", "gripper")
 STATE_DIM = len(STATE_NAMES)  # eef position, eef orientation (wxyz), gripper
 ACTION_DIM = 8  # absolute eef pose + gripper (`ik_abs`, `abs_eef_pose`, quat)
+QUATERNION_DIMS = slice(3, 7)  # wxyz in state and actions: normalized by the identity (training.py)
 ACTION_HORIZON = 50  # openpi default; ≥ the executor's h_exec (10 ticks)
 TASK_PROMPT = "pick up the cube from the conveyor and place it into the bin"
 CAMERAS: dict[str, str] = {"fixed_cam": "base_0_rgb", "wrist_cam": "left_wrist_0_rgb"}
