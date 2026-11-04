@@ -3,6 +3,7 @@ replaced by injected backends."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -175,3 +176,22 @@ def test_failed_training_leaves_no_receipt(tmp_path: Path):
     with pytest.raises(RuntimeError, match="boom"):
         run(_args(tmp_path), backends=_backends(f))
     assert not list((tmp_path / "work").rglob("verified_run-*.json"))
+
+
+def test_norm_stats_shipped_with_the_dataset_are_used_instead_of_computed(tmp_path: Path):
+    _sidecar(tmp_path)
+    shipped = tmp_path / "lerobot" / "local" / "tiny" / "norm_stats.json"
+    shipped.write_text('{"norm_stats": {"state": "shipped"}}')
+    f = Fakes()
+    report = run(_args(tmp_path, check_data_only=True), backends=_backends(f))
+    assert f.norm_stats_calls == 0 and report["norm_stats_source"] == "dataset"
+    used = tmp_path / "work" / "assets" / "pi05_conveyor_static" / "local/tiny" / "norm_stats.json"
+    assert used.read_text() == shipped.read_text()
+    assert report["norm_stats_sha256"] == hashlib.sha256(shipped.read_bytes()).hexdigest()
+
+
+def test_norm_stats_are_computed_when_the_dataset_ships_none(tmp_path: Path):
+    _sidecar(tmp_path)
+    f = Fakes()
+    report = run(_args(tmp_path, check_data_only=True), backends=_backends(f))
+    assert f.norm_stats_calls == 1 and report["norm_stats_source"] == "computed"

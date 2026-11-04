@@ -14,8 +14,8 @@ This document is everything needed to run the formal training and hand the check
   Dataset: `yypeng666/reanchor-conveyor-static-ikabs-v2-lerobot21` (LeRobot v2.1; gated — request
   access on the Hub, it is granted manually). Normalization: position and gripper use openpi's
   quantile statistics; the quaternion components use the identity (they already lie in [−1, 1]).
-  The preflight computes the statistics and refuses any dimension whose normalized extremes leave
-  ±3.
+  The statistics are published with the dataset (`norm_stats.json`); recomputing them refuses any
+  dimension whose normalized extremes leave ±3.
 - **Recipe** (`configs/sft/pi05_conveyor_static.yaml`, do not edit): global batch 256, 3000
   updates (≈ 23.9 epochs), warmup 150, cosine 5e-5 → 5e-6, AdamW clip 1.0, EMA 0.999, bf16, seed
   42. Milestones at 1000 / 2000 / 3000 updates are kept; a rolling checkpoint every 250.
@@ -53,7 +53,9 @@ JAX_PLATFORMS=cpu $PY -m pytest tests -q                       # ≈ 1 min, CPU 
 # dataset: download the gated LeRobot v2.1 dataset into data/lerobot/<repo id>
 $PY -c "from huggingface_hub import snapshot_download as d; d('yypeng666/reanchor-conveyor-static-ikabs-v2-lerobot21', repo_type='dataset', local_dir='data/lerobot/yypeng666/reanchor-conveyor-static-ikabs-v2-lerobot21')"
 
-# 1. preflight (data, transforms, norm stats; no training)
+# 1. preflight (data, transforms, norm stats; no training). The normalization statistics ship with
+#    the dataset (`norm_stats.json`, computed once); the preflight copies them into the work dir and
+#    only recomputes when the file is missing (`norm_stats_source` in preflight.json says which).
 $PY scripts/sft_train.py --run-name formal-h100x8 --work-dir runs/formal --mode formal \
     --dataset-root data/lerobot --batch-size 256 --check-data-only
 # 2. smoke: 100 updates in a separate work dir, then a resume to 120. Check W&B before step 3:

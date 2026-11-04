@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from collections.abc import Callable
@@ -27,6 +28,8 @@ from reanchor_sft.convert import SIDECAR
 from reanchor_sft.profile import PROFILE_PATH, SFTProfile, load_profile
 from reanchor_sft.schedule import SFTLaunchRequest, resolve_schedule
 from reanchor_sft.source import REPO_ROOT
+
+NORM_STATS_FILE = "norm_stats.json"  # next to the sidecar in the dataset; copied into the work dir
 
 
 @dataclass(frozen=True)
@@ -118,9 +121,17 @@ def run(args: LaunchArgs, *, backends: Backends) -> dict:
         checkpoint_root=checkpoint_root,
         wandb_enabled=not args.wandb_disabled,
     )
-    norm_stats = Path(config.assets_dirs) / args.dataset_repo_id / "norm_stats.json"
-    if not norm_stats.exists():
+    norm_stats = Path(config.assets_dirs) / args.dataset_repo_id / NORM_STATS_FILE
+    shipped = Path(args.dataset_root) / args.dataset_repo_id / NORM_STATS_FILE
+    if norm_stats.exists():
+        norm_stats_source = "work_dir"
+    elif shipped.exists():  # computed once and published with the dataset
+        norm_stats.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(shipped, norm_stats)
+        norm_stats_source = "dataset"
+    else:
         norm_stats = backends.norm_stats(config, expected_frames=frames)
+        norm_stats_source = "computed"
     report: dict[str, Any] = {
         "implementation_revision": _git("rev-parse", "HEAD"),
         "implementation_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
@@ -142,6 +153,7 @@ def run(args: LaunchArgs, *, backends: Backends) -> dict:
         "reference_training_examples": profile.training_examples,
         "training_parallelism": "replicated_data_parallel",
         "norm_stats_sha256": _sha256_text(norm_stats),
+        "norm_stats_source": norm_stats_source,
         "checkpoint_dir": str(config.checkpoint_dir),
         "training_started": False,
         "training_completed": False,
